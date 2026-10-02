@@ -1,27 +1,45 @@
-# Wind Turbine Experimental Data Visualization Tool
+# WEC Graph Tools
 
-This notebook is designed to easily visualize various experimental data (resistance, power, voltage, current, etc.).
+Two Colab notebooks for Houston CSV logs. Data lives on Drive: `WEC_Electronics/Data`
+(https://drive.google.com/drive/folders/115T7YsGx1EHJLYIa-piAbEpjV60-vW_y).
 
-## How to Use
-0. The Dataset should be uploaded here:
-https://drive.google.com/drive/folders/115T7YsGx1EHJLYIa-piAbEpjV60-vW_y
-1. Run the **[Setup & Load Data]** cell first. (Wait for a new google login window to pop up. If it doesn't, stop the code and restart it)
-2. Go to the **[2D Graph]** or **[3D Graph]** cells, change the variable names, and run them.
-    * **2D Graph:** `graph_2d("filename.csv", "Variable 1", "Variable 2", ...)`
-   * **3D Graph:** `graph_3d("filename.csv", "X-axis Variable", "Y-axis Variable", "Z-axis Variable")`
-    * If your file is inside certain folder, for example **"test4.csv"** file in folder named **"testing_2-15-2026"** which should be under ".../WEC_Electronics/Data" then file name should be **"testing_2-15-2026/test4.csv"**.
+| Notebook | Code | What it does |
+|---|---|---|
+| `GraphGeneral.ipynb` | `graphutils.py` | Plot columns vs time, binned averages, 3D scatter, CWC score |
+| `PIDTuning.ipynb` | `pid_tuning.py` | Find PID gains for constant power / constant resistance mode |
 
-## Available Variables (Column Names)
-Copy and paste the names exactly as written below:
-* `Time`
-* `Set Resistance`
-* `Set Voltage`
-* `Set Current`
-* `Set Power`
-* `Load Resistance`
-* `Load Voltage`
-* `Load Current`
-* `Load Power`
-* `DAC Output`
-* `Servo Position`
-* `Wind Speed`
+Open a notebook in Colab, run **Setup** once, then edit the file/column names and run the cells.
+Setup downloads the `.py` file from this repo's `main` branch.
+
+## Graphs (`graphutils.py`)
+
+```python
+df = load_data("testing-5-13/tunnel_testing_01.csv")  # path relative to WEC_Electronics/Data
+list(df.columns)                                      # exact column names in this file
+graph_2d(df, "Load Power", "Set Power")               # any number of columns
+graph_2d(df, "Load Power", timestart=30, timeend=60)  # zoom, seconds
+graph_2d_bar(df, "Load Power", resample=2)            # 2 s averages
+graph_3d(df, "Time", "Load Power", "Load Voltage")    # interactive 3D
+final_score(df)                                       # needs a "Wind Speed" column
+```
+
+Time is always seconds from the start of the file. Column names must match exactly;
+a wrong name prints the real ones. The DAC column was renamed over time:
+`DAC Output` (to Apr 2026) -> `Output Voltage` (to Sep 2026) -> `DAC Output Voltage`.
+
+## PID tuning (`pid_tuning.py`)
+
+1. On the bench, log a run where the set point steps (e.g. Set Power 5 -> 6 -> 4 -> 5, 10 s each).
+2. In `PIDTuning.ipynb` set `FILES`, `Y_COL` (`'Load Power'` or `'Load Resistance'`), `SETPOINT`,
+   and `START`/`END` in seconds (skip the part near 0 W/0 A), then run **Tune**.
+3. Type the printed values into Houston Live Data (`Pow Kp`, `Pow Kd`, ... ) or paste them into `main.c`.
+
+Command line works too:
+
+```bash
+python pid_tuning.py run.csv --y "Load Power" --setpoint 5 --start 20
+python pid_tuning.py a.csv b.csv --y "Load Resistance" --setpoint 25   # one gain set for several runs
+python pid_tuning.py                                                  # self-check
+```
+
+Both files run a self-check with `python graphutils.py` / `python pid_tuning.py`.

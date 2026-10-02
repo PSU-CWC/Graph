@@ -23,7 +23,7 @@ The notebook's approach fitted the closed-loop response of the OLD controller an
 simulated a positional PID in seconds, so its gains could not be pasted into main.c.
 
 Usage
-    python pid_tuning.py data.csv --start 2951 --end 4109 --y "Load Resistance" --setpoint 500
+    python pid_tuning.py data.csv --start 30 --end 45 --y "Load Resistance" --setpoint 500
     python pid_tuning.py runs/*.csv --y "Load Power" --setpoint 20   # compare files, one shared gain set
     python pid_tuning.py            # runs the self-check
 """
@@ -228,11 +228,13 @@ def firmware_lines(gains, mode):
 
 def load_run(path, start=0, end=None, y_col='Load Resistance', u_col=None):
     """
-    Read one Houston CSV window.
+    Read one Houston CSV window [start, end) in seconds from the first row.
     Returns (t in s, u, y, loop period in s or None, measurement refresh period in s).
     """
     import pandas as pd
-    df = pd.read_csv(path).iloc[start:end]
+    df = pd.read_csv(path)
+    sec = (df['Time'] - df['Time'].iloc[0]) / 1000.0  # Houston logs ms
+    df = df[(sec >= start) & (sec < (np.inf if end is None else end))]
     if u_col is None:
         u_col = next((c for c in DAC_COLUMNS if c in df.columns), None)
         if u_col is None:
@@ -302,12 +304,12 @@ def run(paths, y_col, setpoint, start=0, end=None, u_col=None, ts=None, min_r2=0
         raise ValueError("No usable files.")
 
     # Per-file table: plant fit + gains tuned on that file alone.
-    print(f"\n{'file':<32}{'rows':>7}{'Ts ms':>7}{'hold ms':>8}{'K':>11}{'tau s':>8}{'theta s':>8}{'R2':>7}"
+    print(f"\n{'file':<32}{'rows':>7}{'Ts ms':>7}{'hold ms':>8}{'K':>11}{'tau s':>9}{'theta s':>8}{'R2':>7}"
           f"{'Kp':>12}{'Kd':>12}")
     for path, t, u, y, Ts, pl in runs:
         g, _ = tune_gains(pl, Ts, setpoint, use_ki=use_ki)
         flag = '' if pl['r2'] >= min_r2 else '  <- poor fit, excluded'
-        print(f"{path[-31:]:<32}{len(t):>7}{Ts * 1000:>7.1f}{pl['hold'] * 1000:>8.0f}{pl['K']:>11.4g}{pl['tau']:>8.3g}"
+        print(f"{path[-31:]:<32}{len(t):>7}{Ts * 1000:>7.1f}{pl['hold'] * 1000:>8.0f}{pl['K']:>11.4g}{pl['tau']:>9.3g}"
               f"{pl['theta']:>8.3g}{pl['r2']:>7.3f}{g[0]:>12.4g}{g[2]:>12.4g}{flag}")
 
     good = [r for r in runs if r[5]['r2'] >= min_r2]
@@ -330,8 +332,8 @@ def run(paths, y_col, setpoint, start=0, end=None, u_col=None, ts=None, min_r2=0
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('csv', nargs='+', help='one or more Houston CSV files')
-    ap.add_argument('--start', type=int, default=0, help='first row of the window (applies to every file)')
-    ap.add_argument('--end', type=int, default=None, help='last row, exclusive (applies to every file)')
+    ap.add_argument('--start', type=float, default=0, help='window start in s (applies to every file)')
+    ap.add_argument('--end', type=float, default=None, help='window end in s (applies to every file)')
     ap.add_argument('--y', default='Load Resistance', help="'Load Resistance' or 'Load Power'")
     ap.add_argument('--u', default=None, help='DAC column (default: auto-detect)')
     ap.add_argument('--setpoint', type=float, required=True)

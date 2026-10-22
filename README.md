@@ -10,6 +10,8 @@ Two Colab notebooks for Houston CSV logs. Data lives on Drive: `WEC_Electronics/
 
 Open a notebook in Colab, run **Setup** once, then edit the file/column names and run the cells.
 Setup downloads the `.py` file from this repo's `main` branch.
+`PIDTuning.ipynb` also plots, and runs locally (VS Code / Jupyter) with the CSVs next to it:
+`pip install numpy pandas scipy matplotlib ipykernel`.
 
 ## Graphs (`graphutils.py`)
 

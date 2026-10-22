@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blade Rotor View</title>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+:root { --bg:#fafaf9; --panel:#fff; --fg:#1c1917; --muted:#78716c; --line:#e7e5e4;
+  --c1:#2563eb; --c2:#ea580c; --c3:#16a34a; --c4:#9333ea; --c5:#0d9488; --c6:#db2777; --bad:#dc2626;
+  --raw1:#1c1917; --raw2:#78716c; --raw3:#b8b2ad; --grav1:#713f12; --grav2:#a16207; --grav3:#d6a21e; --mot1:#9a3412; --mot2:#ea580c; --mot3:#fdba74; --c2b:#fdba74; --c3b:#4ade80; --c4b:#d8b4fe; --c5b:#5eead4; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#1c1917; --panel:#292524; --fg:#f5f5f4;
+  --muted:#a8a29e; --line:#44403c; --c1:#60a5fa; --c2:#fb923c; --c3:#4ade80; --c4:#c084fc; --c5:#2dd4bf; --c6:#f472b6; --bad:#f87171;
+  --raw1:#f5f5f4; --raw2:#a8a29e; --raw3:#57534e; --grav1:#fde68a; --grav2:#eab308; --grav3:#a16207; --mot1:#fed7aa; --mot2:#fb923c; --mot3:#c2410c; --c2b:#c2410c; --c3b:#166534; --c4b:#6b21a8; --c5b:#115e59; } }
+:root[data-theme="dark"] { --bg:#1c1917; --panel:#292524; --fg:#f5f5f4; --muted:#a8a29e; --line:#44403c;
+  --c1:#60a5fa; --c2:#fb923c; --c3:#4ade80; --c4:#c084fc; --c5:#2dd4bf; --c6:#f472b6; --bad:#f87171;
+  --raw1:#f5f5f4; --raw2:#a8a29e; --raw3:#57534e; --grav1:#fde68a; --grav2:#eab308; --grav3:#a16207; --mot1:#fed7aa; --mot2:#fb923c; --mot3:#c2410c; --c2b:#c2410c; --c3b:#166534; --c4b:#6b21a8; --c5b:#115e59; }
+* { box-sizing:border-box; }
+body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
+h1 { font-size:18px; margin:0 0 2px; } .muted { color:var(--muted); font-size:12px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:12px; }
+.row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.consts { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px 14px; }
+.consts label { display:flex; flex-direction:column; font-size:12px; color:var(--muted); }
+input[type=number], select { font:inherit; padding:4px 6px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; }
+input[type=range] { flex:1; min-width:160px; }
+button { font:inherit; padding:5px 14px; border-radius:4px; border:1px solid var(--line); background:var(--c1); color:#fff; cursor:pointer; }
+.views { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
+.views svg { width:100%; max-width:340px; display:block; margin:auto; }
+.views h2 { font-size:13px; margin:0 0 6px; }
+table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+td { padding:2px 4px; border-bottom:1px solid var(--line); } td:last-child { text-align:right; }
+.legend span { display:inline-block; margin-right:10px; font-size:12px; }
+.chart { height:210px; }
+.bad { color:var(--bad); font-weight:600; }
+.cap { color:var(--muted); font-size:12px; margin:0 0 14px 55px; }
+.mx { font-family:ui-monospace, Menlo, monospace; font-size:12px; width:auto; } .mx td { padding:2px 8px; text-align:right; border:none; }
+.bk { border-left:2px solid var(--fg); border-right:2px solid var(--fg); border-radius:6px; }
+.eq { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } .eq > span { font-size:18px; } .eq .muted { text-align:center; }
+.mx th { font-weight:normal; color:var(--muted); padding:2px 8px; text-align:right; } .mx td.l { text-align:left; color:var(--muted); }
+.doc { font-size:13px; } .doc td { text-align:left; vertical-align:top; } .doc td:first-child { white-space:nowrap; font-weight:600; padding-right:14px; }
+.doc h3 { font-size:13px; margin:12px 0 4px; } .doc ol, .doc ul { margin:4px 0; padding-left:20px; }
+</style>
+</head>
+<body>
+<h1>Wind Turbine Rotor State</h1>
+<div class="muted" id="meta"></div>
+
+<div class="panel row" id="drop">
+  <label><b>Open log</b> <input type="file" id="file" accept=".txt,.tsv,.csv"></label>
+  <span class="muted">or drop a WT901 .txt anywhere on the page</span>
+  <button id="csv" hidden>Download CSV</button>
+  <span id="status" class="bad">Scripts are not running here — open this file in a web browser (Chrome, Edge, Safari, Firefox).</span>
+</div>
+
+<details class="panel doc" open>
+  <summary><b>How to use</b></summary>
+  <ol>
+    <li><b>Open a log</b>: pick a WT901 <code>.txt</code> above or drop it on the page. The first time, the page downloads Python (~20 MB) to run the analysis, so it needs internet and takes a few seconds.</li>
+    <li><b>Set the constants</b>: at least <i>sensor radius r</i> (distance from the rotation axis to the sensor). Masses and radii are only needed for torque; wind speed only for tip speed ratio.</li>
+    <li><b>Play</b> or drag the time slider. Click any chart to jump to that moment. The drawings, the current values and the transform matrix follow the time cursor.</li>
+    <li><b>Relationships</b> (bottom): choose X and Y to see how two quantities move together, e.g. pitch vs rpm. Pearson r (−1…1) says how close they are to a straight line; the fit gives the equation y = … and R² (share of Y's variation the equation explains; for a line R² = r²).</li>
+    <li><b>Download CSV</b> for every computed column with the current constants.</li>
+  </ol>
+  <h3>Reading the charts (Plotly)</h3>
+  <ul>
+    <li><b>Hover</b> over a line to read exact values at that time.</li>
+    <li><b>Click</b> a point to move the time cursor there (drawings, values and transform update).</li>
+    <li><b>Drag</b> across a chart to zoom into that box; drag along the edge of an axis to zoom only that axis. Zooming time on one chart zooms every time chart, so the pairs stacked under each other (computed above, measured below) stay aligned.</li>
+    <li><b>Double-click</b> a chart to zoom back out to everything.</li>
+    <li><b>Click a legend entry</b> to hide or show that line; <b>double-click</b> it to show only that line (double-click again for all).</li>
+    <li>The toolbar at the top right of each chart (appears on hover) has pan, zoom in/out, autoscale, reset and <b>download as PNG</b>.</li>
+  </ul>
+  <h3>Limits to keep in mind</h3>
+  <ul>
+    <li>The gyro saturates at ±2000 °/s (≈ 333 rpm). Above that, speed comes from the centripetal acceleration and is only as good as <i>r</i>; the accelerometer itself saturates at ±16 g (r = 0.1 m → ≈ 378 rpm).</li>
+    <li>Samples arrive at ~10 Hz. Near 600 rpm (and 1200, 1800 …) the rotor turns a whole number of times between samples, so the blade angle from gravity is unreliable there.</li>
+    <li>Pitch is seen only while the rotor spins above ~30 rpm and the gyro is not saturated; it is the change since the start of the record (set <i>blade pitch at start</i> for absolute values).</li>
+    <li>Grey lines are raw sensor readings (x dark, y mid, z light); coloured lines are computed. Blank stretches mean "cannot be computed here", not zero.</li>
+  </ul>
+</details>
+
+<details class="panel doc">
+  <summary><b>What the values mean</b></summary>
+  <table>
+    <tr><td>sensor frame x, y, z</td><td>The three axes printed on the sensor. They turn with the blade. All raw readings are in this frame.</td></tr>
+    <tr><td>u (rotation axis)</td><td>Direction the rotor spins about, written in sensor x, y, z. Found as the dominant direction of the gyro readings (SVD); corrected for pitch over time.</td></tr>
+    <tr><td>e1 (radial)</td><td>From the axis out along the blade to the sensor, found from the direction of the centripetal acceleration. Pitch turns the blade about this line.</td></tr>
+    <tr><td>e2 (chord-wise)</td><td>u × e1: the direction the sensor moves as the rotor turns.</td></tr>
+    <tr><td>speed (rpm), ω</td><td>Spin rate about u. rpm = (°/s) ÷ 6; ω in rad/s = rpm × 2π / 60.</td></tr>
+    <tr><td>α</td><td>Angular acceleration: how fast ω changes (rad/s²). Positive = speeding up.</td></tr>
+    <tr><td>net torque τ = I·α</td><td>Total torque on the rotor (wind minus generator minus friction). Zero at constant speed even when the wind pushes hard; the wind's own torque needs power data (τ = P/ω).</td></tr>
+    <tr><td>I (moment of inertia)</td><td>Resistance to spin-up: n·m·R²/3 for the blades (uniform rods from the axis to R) + ½·m·r² for hub and generator rotor (solid disk) + I₀ for anything else.</td></tr>
+    <tr><td>blade angle θ</td><td>Where the blade is on its circle. 0° = sensor at the bottom (from gravity) when the axis is horizontal; otherwise 0° = start of the record.</td></tr>
+    <tr><td>axis elevation</td><td>How far the rotation axis is tilted up from horizontal (°).</td></tr>
+    <tr><td>axis drift</td><td>Angle between the spin direction over the last ~2 s and the pitch-corrected axis: yaw, shaft wobble, blade flex.</td></tr>
+    <tr><td>wobble e1, e2</td><td>Rotation rate across the axis (°/s), split into radial and chord-wise parts, with the pitch rate removed.</td></tr>
+    <tr><td>blade pitch</td><td>Twist of the blade about its own span (e1), from the IMU. Change since the start + <i>blade pitch at start</i>.</td></tr>
+    <tr><td>tip speed ratio λ</td><td>Blade tip speed ÷ wind speed = ωR / V. Needs <i>wind speed V</i>.</td></tr>
+    <tr><td>centripetal ω²r</td><td>Acceleration toward the axis at the sensor, from turning in a circle.</td></tr>
+    <tr><td>tangential αr</td><td>Acceleration along the direction of motion, from speeding up or slowing down.</td></tr>
+    <tr><td>gyro clipped</td><td>A gyro axis hit ±2000 °/s; that sample's spin comes from the accelerometer instead ("speed source").</td></tr>
+  </table>
+</details>
+
+<div id="main" hidden>
+
+<div class="panel row">
+  <button id="play">▶ Play</button>
+  <select id="speed" aria-label="Playback speed"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>5</option><option>10</option></select>
+  <input type="range" id="seek" min="0" step="0.01" value="0" aria-label="Time">
+  <span id="clock" style="font-variant-numeric:tabular-nums"></span>
+</div>
+
+<details class="panel" open>
+  <summary><b>Constants</b> <span class="muted">— charts and drawings recompute on change</span></summary>
+  <div class="consts" style="margin-top:8px">
+    <label>Sensor radius r (m) — distance from axis<input type="number" id="r" value="0.1" step="0.01" min="0.001"></label>
+    <label>Rotor radius R (m) — used for inertia I<input type="number" id="R" value="0.1" step="0.01" min="0.001"></label>
+    <label>Number of blades n<input type="number" id="n" value="3" step="1" min="1"></label>
+    <label>Mass per blade m (kg) — placeholder<input type="number" id="m" value="0.1" step="0.01" min="0"></label>
+    <label>Hub + generator rotor mass (kg)<input type="number" id="hub_m" value="0" step="0.01" min="0"></label>
+    <label>Hub + generator rotor radius (m) — solid disk<input type="number" id="hub_r" value="0.02" step="0.005" min="0"></label>
+    <label>Other inertia I₀ (kg·m²)<input type="number" id="I0" value="0" step="0.0001" min="0"></label>
+    <label>Blade pitch at start (°)<input type="number" id="pitch0" value="0" step="1"></label>
+    <label>Wind speed V (m/s) — 0 = unknown<input type="number" id="V" value="0" step="0.5" min="0"></label>
+    <label>Angle reference offset (°)<input type="number" id="offset" value="0" step="1"></label>
+    <label>α smoothing window (s)<input type="number" id="smooth" value="0.5" step="0.1" min="0"></label>
+    <label>Reverse rotation direction<span><input type="checkbox" id="flip"> view from the other end of the axis</span></label>
+  </div>
+  <div class="muted" id="Iinfo" style="margin-top:6px"></div>
+</details>
+
+<div class="panel views">
+  <div><h2>Front view (looking along the axis; down = gravity)</h2><svg id="top" viewBox="-1.45 -1.45 2.9 2.9"></svg>
+    <div class="legend"><span style="color:var(--c1)">━ velocity v</span><span style="color:var(--c2)">━ centripetal accel</span><span style="color:var(--c3)">━ tangential accel</span><span style="color:var(--c4)">━ axis wobble</span></div>
+    <div class="muted">Arrow lengths are relative to the largest value in this record: velocity on its own scale; centripetal and tangential accel share one scale, so their lengths compare. Rotor drawn to scale (r, R in meters).</div></div>
+  <div><h2>Side view (axis elevation above horizontal)</h2><svg id="side" viewBox="-1.45 -1.45 2.9 2.9"></svg></div>
+  <div><h2>Current values</h2><table id="stats"></table></div>
+</div>
+
+<div class="panel doc">
+  <h2 style="font-size:13px; margin:0 0 6px">Sensor → rotor transform at this moment</h2>
+  <p class="muted" style="margin:0 0 8px">Each row is a rotor direction written in sensor x, y, z. Multiplying a raw reading by this matrix gives its rotor components.
+    It is a pure rotation (rows are perpendicular unit vectors), so the reverse is the transpose. e1 stays fixed on the sensor; u and e2 turn with blade pitch.</p>
+  <div class="row" style="align-items:flex-start; gap:28px" id="xform"></div>
+</div>
+
+<div class="panel">
+  <div id="ch_rpm" class="chart"></div>
+  <p class="cap">Blue: rotor speed (rpm). Light orange: speed from the centripetal acceleration (shown when the gyro saturates). Red dots: gyro saturated, speed taken from the accelerometer.</p>
+  <div id="ch_gyro" class="chart"></div>
+  <p class="cap">Raw gyro x, y, z (°/s), exactly as logged (x dark grey, y mid, z light). The spin above is these three combined along the axis u (see the transform panel).</p>
+  <div id="ch_tq" class="chart"></div>
+  <p class="cap">Green: α, the rate of change of the speed (rad/s²). Light green: net torque I·α (right axis), the same curve scaled by I.</p>
+  <div id="ch_galpha" class="chart"></div>
+  <p class="cap">Rate of change of each raw gyro axis (rad/s², same smoothing as α). The sensor does not measure angular acceleration; this is the derivative of the raw readings.</p>
+  <div id="ch_ang" class="chart"></div>
+  <p class="cap">Black: blade angle used in the drawing (gyro integrated, held to the gravity angle). Grey dots: angle from gravity alone, sample by sample.</p>
+  <div id="ch_dang" class="chart"></div>
+  <p class="cap" id="cap_dang">The sensor's own AngleX/Y/Z (Euler angles it computes internally), for comparison. They describe the sensor's attitude, not the blade angle, and jump near ±90°.</p>
+  <div id="ch_accp" class="chart"></div>
+  <p class="cap">Orange: centripetal acceleration estimated from the accelerometer. Teal: part along the rotation axis (gravity × sin(elevation)).</p>
+  <div id="ch_acc" class="chart"></div>
+  <p class="cap">Raw accelerometer x, y, z (g), exactly as logged. Includes gravity, centripetal and tangential acceleration mixed together.</p>
+  <div id="ch_grav" class="chart"></div>
+  <p class="cap">Gravity part of the raw reading (g), estimated. An accelerometer at rest reads +1 g pointing up, so this vector has length ≈ 1 and turns as the blade turns.</p>
+  <div id="ch_motion" class="chart"></div>
+  <p class="cap">Raw minus gravity (g): what the sensor feels from motion alone, i.e. centripetal + tangential acceleration + vibration.</p>
+  <div id="ch_pitch" class="chart"></div>
+  <p class="cap">Pink: blade pitch from the IMU. Blank where the gyro is saturated or the rotor is too slow to see the axis.</p>
+  <div id="ch_tilt" class="chart"></div>
+  <p class="cap">Teal: rotation axis tilt from horizontal. Light teal: how far the short-term spin direction strays from the axis.</p>
+  <div id="ch_wob" class="chart"></div>
+  <p class="cap">Purple: rotation across the axis (°/s), radial e1 (dark) and chord-wise e2 (light), pitch rate removed. Ideally near zero.</p>
+</div>
+
+<div class="panel">
+  <h2 style="font-size:13px; margin:0 0 6px">Relationships between variables</h2>
+  <div class="row">
+    <label>X <select id="rx"></select></label>
+    <label>Y <select id="ry"></select></label>
+    <label><input type="checkbox" id="steady" checked> steady samples only: |α| &lt;
+      <input type="number" id="amax" value="0.5" step="0.1" min="0" style="width:5em"> rad/s²</label>
+    <label>fit <select id="deg"><option value="1">line</option><option value="2">quadratic</option><option value="3">cubic</option></select></label>
+    <span id="rstat" class="muted"></span>
+  </div>
+  <div id="ch_rel" style="height:340px"></div>
+  <div class="muted">Click a cell in the matrix to plot that pair above.</div>
+  <div id="ch_corr" style="height:460px"></div>
+</div>
+</div>
+
+<script type="text/plain" id="pysrc">__PYSRC__</script>
+
+<script>
+let D = __DATA__, N, T;
+const DEFAULTS = __DEFAULTS__;   // constant defaults come only from DEFAULTS in blade_torque.py
+const PI = Math.PI, DEG = 180 / PI, G = 9.81;
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const C = {};
+let W, simT = 0, playing = false, lastFrame = 0, lastRelayout = 0;
+
+const setConsts = c => { for (const [k, v] of Object.entries(c)) if ($(k)) $(k).type === 'checkbox' ? $(k).checked = !!v : $(k).value = v; };
+setConsts(DEFAULTS);
+function init(data) {
+  D = data; N = D.t.length; T = D.t; simT = 0; playing = false; $('play').textContent = '▶ Play';
+  $('meta').textContent = `${D.name} · ${N} samples · ${T[N-1].toFixed(1)} s · rotation axis in sensor frame u = (${D.u.join(', ')})`;
+  $('seek').max = T[N-1];
+  setConsts(D.consts);
+  $('main').hidden = false;
+  derive(); charts(); render();
+}
+
+// Dropped logs are analyzed by blade_torque.py itself (embedded below), run in the browser by Pyodide
+let py = null, logText = null;
+const status = (msg, bad) => { $('status').textContent = msg; $('status').className = bad ? 'bad' : 'muted'; };
+status(typeof Plotly === 'undefined' ? 'Could not load the chart library (plotly) — needs internet the first time' : '', typeof Plotly === 'undefined');
+window.onerror = (msg) => status(`Error: ${msg}`, true);   // surface any failure on the page, not only in the console
+async function python() {
+  if (py) return py;
+  status('Loading Python in the browser (first time downloads ~20 MB)…');
+  await new Promise((ok, fail) => { const el = document.createElement('script');
+    el.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js';
+    el.onload = ok; el.onerror = () => fail(new Error('could not load Pyodide — needs internet the first time')); document.head.append(el); });
+  const p = await loadPyodide();
+  await p.loadPackage(['numpy', 'pandas']);
+  p.FS.writeFile('blade_torque.py', $('pysrc').textContent);
+  py = p.pyimport('blade_torque');
+  return py;
+}
+async function openLog(file) {
+  if (!file) return;
+  try {
+    const text = await file.text(), bt = await python();
+    status(`Analyzing ${file.name}…`);
+    const data = JSON.parse(bt.browser_load(text, file.name.replace(/\.[^.]*$/, '')));
+    data.consts = {};                                                  // keep the constants already on the page
+    logText = text; init(data); $('csv').hidden = false; status(`${file.name} loaded`);
+  } catch (e) { status(`Could not read ${file.name}: ${e.message.split('\n').filter(Boolean).pop()}`, true); }
+}
+$('file').onchange = e => openLog(e.target.files[0]);
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); openLog(e.dataTransfer.files[0]); });
+$('csv').onclick = async () => {
+  const csv = (await python()).browser_csv(logText, JSON.stringify({ ...C, flip: +C.flip }));
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: `${D.name}_rotor.csv` });
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+function derive() {
+  for (const k of ['r', 'R', 'n', 'm', 'hub_m', 'hub_r', 'I0', 'offset', 'pitch0', 'V', 'smooth']) C[k] = +$(k).value || 0;
+  C.flip = $('flip').checked;
+  const sg = C.flip ? -1 : 1;   // u -> -u: spin, wobble e2, elevation and angles change sign (same as Python to_csv)
+  C.r = Math.max(C.r, 1e-4); C.R = Math.max(C.R, 1e-4);
+  const w = [], wAcc = [], src = [], theta = [0];
+  let sign = 1;
+  for (let i = 0; i < N; i++) {
+    const wg = sg * D.w_axis[i] / DEG;
+    if (!D.gyro_clip[i] && Math.abs(wg) > 0.5) sign = Math.sign(wg);
+    wAcc[i] = Math.sqrt(Math.max(D.a_cent[i] * G / C.r, 0));   // centripetal = w^2 r  ->  w = sqrt(a / r)
+    if (!D.gyro_clip[i]) { w[i] = wg; src[i] = 'gyro'; }
+    else if (!D.acc_clip[i]) { w[i] = sign * wAcc[i]; src[i] = 'accel estimate'; }
+    else { w[i] = sign * wAcc[i]; src[i] = 'unmeasurable (both clipped)'; }
+    if (i) theta[i] = theta[i-1] + (w[i] + w[i-1]) / 2 * (T[i] - T[i-1]) * DEG;
+  }
+  const dts = T.slice(1).map((t, i) => t - T[i]).sort((a, b) => a - b), dt = dts[dts.length >> 1];
+  // gyro angle drifts; pull it onto the gravity angle (circular mean of the difference over a 2 s window)
+  const ag = D.angle_grav.map(v => v == null ? null : ((sg * v) % 360 + 360) % 360);
+  if (ag.some(v => v != null)) {
+    const d = ag.map((v, i) => v == null ? null : (v - theta[i]) / DEG), h2 = Math.max(1, Math.round(1 / dt));
+    const corr = d.map((_, i) => { let c = 0, s = 0, n = 0;
+      for (let j = Math.max(0, i - h2); j <= Math.min(N - 1, i + h2); j++) if (d[j] != null) { c += Math.cos(d[j]); s += Math.sin(d[j]); n++; }
+      return n ? Math.atan2(s / n, c / n) : null; });
+    for (let i = 1; i < N; i++) if (corr[i] == null) corr[i] = corr[i - 1];          // forward fill ...
+    for (let i = N - 2; i >= 0; i--) if (corr[i] == null) corr[i] = corr[i + 1];     // ... then backward fill
+    for (let i = 0; i < N; i++) theta[i] += corr[i] * DEG;
+  }
+  const k = Math.max(1, Math.round(C.smooth / dt)), h = k >> 1;
+  const ws = w.map((_, i) => { let s = 0, c = 0; for (let j = Math.max(0, i - h); j <= Math.min(N - 1, i + h); j++) { s += w[j]; c++; } return s / c; });
+  const alpha = ws.map((_, i) => { const a = Math.max(0, i - 1), b = Math.min(N - 1, i + 1); return (ws[b] - ws[a]) / (T[b] - T[a]); });
+  const smoothDiff = y => { const ys = y.map((_, i) => { let s = 0, c = 0; for (let j = Math.max(0, i - h); j <= Math.min(N - 1, i + h); j++) { s += y[j]; c++; } return s / c; });
+    return ys.map((_, i) => { const a = Math.max(0, i - 1), b = Math.min(N - 1, i + 1); return (ys[b] - ys[a]) / (T[b] - T[a]); }); };
+  const rawAlpha = D.gyro.map(ax => smoothDiff(ax.map(v => v / DEG)));   // d(raw gyro axis)/dt, rad/s^2, same smoothing as alpha
+  const I = C.n * C.m * C.R ** 2 / 3 + C.hub_m * C.hub_r ** 2 / 2 + C.I0;
+  $('Iinfo').textContent = `Moment of inertia I = n·m·R²/3 + ½·m_hub·r_hub² + I₀ = ${I.toExponential(3)} kg·m²  (blades: uniform rods from the axis to R; hub: solid disk)`;
+  const max = a => Math.max(...a.map(Math.abs).filter(isFinite), 1e-9);
+  W = { w, wAcc, src, theta, alpha, I, rawAlpha, sg, torque: alpha.map(a => I * a), we2: D.w_e2.map(v => v == null ? null : sg * v), elev: D.elev.map(v => v == null ? null : sg * v),
+        gravRef: ag.some(v => v != null), pitch: D.pitch.map(v => v == null ? null : v + C.pitch0),
+        tsr: w.map(v => C.V > 0 ? Math.abs(v) * C.R / C.V : null),   // tip speed ratio = wR / V
+        vMax: max(w) * C.r, acMax: Math.max(max(w) ** 2, max(alpha)) * C.r,
+        wobMax: max(D.w_e1.map((x, i) => Math.hypot(x, D.w_e2[i]))) };
+}
+
+const CHARTS = ['ch_rpm', 'ch_gyro', 'ch_tq', 'ch_galpha', 'ch_ang', 'ch_dang', 'ch_accp', 'ch_acc', 'ch_grav', 'ch_motion', 'ch_pitch', 'ch_tilt', 'ch_wob'];
+function charts() {
+  const fg = css('--fg'), grid = css('--line'), x = T;
+  const base = (title, extra = {}) => ({ title: { text: title, font: { size: 13 } }, margin: { l: 55, r: 55, t: 30, b: 40 },
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: fg, size: 11 }, showlegend: true,
+    legend: { orientation: 'h', y: 1.18, x: 1, xanchor: 'right' }, xaxis: { gridcolor: grid, title: { text: 'time (s)', standoff: 2 } }, yaxis: { gridcolor: grid, zerolinecolor: grid },
+    shapes: [{ type: 'line', xref: 'x', yref: 'paper', x0: simT, x1: simT, y0: 0, y1: 1, line: { color: css('--muted'), width: 1.5 } }],
+    uirevision: 'keep', ...extra });   // uirevision: keep the user's zoom when constants change
+  const L = (y, name, color, more = {}) => ({ x, y, name, type: 'scatter', mode: 'lines', line: { color, width: 1.5 }, ...more });
+  const rpm = W.w.map(v => v * 60 / (2 * PI)), clip = rpm.map((v, i) => D.gyro_clip[i] ? v : null);
+  const cfg = { responsive: true, displaylogo: false };
+  // raw sensor readings: greys, x dark / y mid / z light, everywhere; no dashes, shades of one colour per family
+  const raw = (arr, label, more = {}) => arr.map((y, j) => L(y, `${label} ${'xyz'[j]} (raw)`, css(`--raw${j + 1}`),
+    { line: { color: css(`--raw${j + 1}`), width: 1.2 }, ...more }));
+  const y2 = (title) => ({ yaxis2: { overlaying: 'y', side: 'right', gridcolor: 'rgba(0,0,0,0)', title: { text: title } } });
+  const yt = (b, title) => ({ ...b, yaxis: { ...b.yaxis, title: { text: title } } });
+  Plotly.react('ch_rpm', [L(rpm, 'speed (rpm)', css('--c1')), L(W.wAcc.map(v => v * 60 / (2 * PI)), 'accel estimate (rpm)', css('--c2b'), { visible: D.gyro_clip.some(c => c) || 'legendonly' }),
+    L(clip, 'gyro clipped', css('--bad'), { mode: 'markers', marker: { size: 4, color: css('--bad') } })], yt(base('Rotor speed'), 'rpm'), cfg);
+  Plotly.react('ch_gyro', raw(D.gyro, 'gyro'), yt(base('Raw gyro (measured)'), '°/s'), cfg);
+  Plotly.react('ch_tq', [L(W.alpha, 'α (rad/s²)', css('--c3')),
+    L(W.torque, 'net torque τ = I·α (N·m)', css('--c3b'), { yaxis: 'y2' })],
+    yt(base('Angular acceleration and net torque', y2('N·m')), 'rad/s²'), cfg);
+  Plotly.react('ch_galpha', raw(W.rawAlpha, 'd(gyro)/dt'), yt(base('Rate of change of the raw gyro axes'), 'rad/s²'), cfg);
+  const wrap = v => ((v + C.offset) % 360 + 360) % 360, M = (y, name, color, size = 3) => L(y, name, color, { mode: 'markers', marker: { size, color } });
+  Plotly.react('ch_ang', [M(W.theta.map(wrap), 'blade angle θ (°)', css('--fg')),
+    M(D.angle_grav.map(v => v == null ? null : ((W.sg * v) % 360 + 360) % 360), 'angle from gravity only (°)', css('--muted'), 5)],
+    yt(base('Blade angle position'), '°'), cfg);
+  for (const id of ['ch_dang', 'cap_dang']) $(id).hidden = !D.dev_angles;    // simulated logs have no device angles
+  if (D.dev_angles) Plotly.react('ch_dang', raw(D.dev_angles, 'sensor Angle'), yt(base('Sensor\'s own angles (measured)'), '°'), cfg);
+  Plotly.react('ch_accp', [L(D.a_cent, 'centripetal from accel (g)', css('--c2')),
+    L(D.a_axis.map(v => W.sg * v), 'along the axis (g)', css('--c5'))],
+    yt(base('Acceleration parts'), 'g'), cfg);
+  Plotly.react('ch_acc', raw(D.acc, 'accel'), yt(base('Raw accelerometer (measured)'), 'g'), cfg);
+  const xyz = (arr, label, fam) => arr.map((y, j) => L(y, `${label} ${'xyz'[j]}`, css(`--${fam}${j + 1}`), { line: { color: css(`--${fam}${j + 1}`), width: 1.2 } }));
+  Plotly.react('ch_grav', xyz(D.grav, 'gravity', 'grav'), yt(base('Gravity part of the raw accelerometer'), 'g'), cfg);
+  Plotly.react('ch_motion', xyz(D.acc.map((a, j) => a.map((v, i) => v == null || D.grav[j][i] == null ? null : v - D.grav[j][i])), 'raw − gravity', 'mot'),
+    yt(base('Raw accelerometer minus gravity (motion only)'), 'g'), cfg);
+  Plotly.react('ch_pitch', [L(W.pitch, 'blade pitch (°)', css('--c6'))], base('Blade pitch (from the IMU; blank where the gyro is clipped or the rotor is too slow)'), cfg);
+  Plotly.react('ch_tilt', [L(W.elev, 'axis elevation above horizontal (°)', css('--c5')), L(D.drift, 'axis drift, 2 s window (°)', css('--c5b'))], base('Rotation axis vs gravity'), cfg);
+  Plotly.react('ch_wob', [L(D.w_e1, 'wobble e1 (°/s)', css('--c4')), L(W.we2, 'wobble e2 (°/s)', css('--c4b'))], base('Angular velocity across the axis (wobble)'), cfg);
+  // click = jump to that time; zooming the time axis of one chart zooms all of them, so stacked charts stay aligned
+  let syncing = false;
+  for (const id of CHARTS) { if (!$(id).on) continue;
+    $(id).removeAllListeners?.('plotly_click'); $(id).on('plotly_click', e => seek(e.points[0].x));
+    $(id).removeAllListeners?.('plotly_relayout'); $(id).on('plotly_relayout', e => {
+      if (syncing || !('xaxis.range[0]' in e || 'xaxis.autorange' in e)) return;
+      syncing = true;
+      const upd = 'xaxis.autorange' in e ? { 'xaxis.autorange': true } : { 'xaxis.range': [e['xaxis.range[0]'], e['xaxis.range[1]']] };
+      Promise.all(CHARTS.filter(o => o !== id && $(o).on && !$(o).hidden).map(o => Plotly.relayout(o, upd))).finally(() => syncing = false);
+    }); }
+  relations();
+}
+
+// Every per-sample quantity, for the scatter and the correlation matrix
+function allSeries() {
+  return { 'time (s)': T, 'speed (rpm)': W.w.map(v => v * 60 / (2 * PI)), 'α (rad/s²)': W.alpha, 'net torque (N·m)': W.torque,
+    'blade pitch (°)': W.pitch, 'tip speed ratio λ': W.tsr, 'blade angle (°)': W.theta.map(v => ((v + C.offset) % 360 + 360) % 360),
+    'axis elevation (°)': W.elev, 'axis drift (°)': D.drift, 'wobble e1 (°/s)': D.w_e1, 'wobble e2 (°/s)': W.we2,
+    'centripetal ω²r (g)': W.w.map(v => v * v * C.r / G), 'sensor speed v (m/s)': W.w.map(v => v * C.r) };
+}
+// least-squares polynomial y = c0 + c1 x + ... (normal equations on x scaled to [-1, 1] for stability)
+function polyfit(x, y, deg) {
+  const n = x.length; if (n <= deg + 1) return null;
+  const lo = Math.min(...x), hi = Math.max(...x), m = (hi + lo) / 2, h = (hi - lo) / 2 || 1, z = x.map(v => (v - m) / h);
+  const A = [...Array(deg + 1)].map((_, i) => [...Array(deg + 1)].map((_, j) => z.reduce((s, v) => s + v ** (i + j), 0)));
+  const b = [...Array(deg + 1)].map((_, i) => z.reduce((s, v, k) => s + v ** i * y[k], 0));
+  for (let i = 0; i <= deg; i++) for (let k = i + 1; k <= deg; k++) { const f = A[k][i] / A[i][i]; for (let j = i; j <= deg; j++) A[k][j] -= f * A[i][j]; b[k] -= f * b[i]; }
+  const a = Array(deg + 1).fill(0); for (let i = deg; i >= 0; i--) a[i] = (b[i] - A[i].slice(i + 1).reduce((s, v, j) => s + v * a[i + 1 + j], 0)) / A[i][i];
+  if (a.some(v => !isFinite(v))) return null;
+  // back to coefficients in x: expand sum a_i ((x - m)/h)^i
+  const c = Array(deg + 1).fill(0), binom = (p, q) => q === 0 ? 1 : binom(p - 1, q - 1) * p / q;
+  a.forEach((ai, i) => { for (let k = 0; k <= i; k++) c[k] += ai * binom(i, k) * (-m) ** (i - k) / h ** i; });
+  const f = v => c.reduce((s, ck, k) => s + ck * v ** k, 0), my = y.reduce((s, v) => s + v, 0) / n;
+  const r2 = 1 - y.reduce((s, v, k) => s + (v - f(x[k])) ** 2, 0) / y.reduce((s, v) => s + (v - my) ** 2, 0);
+  const cx = [...Array(60)].map((_, k) => lo + (hi - lo) * k / 59);
+  return { c, r2, cx, cy: cx.map(f) };
+}
+const pearson = (x, y) => { const n = x.length, mx = x.reduce((a, b) => a + b, 0) / n, my = y.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; }
+  return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null; };
+
+function relations() {
+  const S = allSeries(), names = Object.keys(S), fg = css('--fg'), grid = css('--line'), cfg = { responsive: true, displaylogo: false };
+  if (!$('rx').options.length) {
+    for (const id of ['rx', 'ry']) $(id).innerHTML = names.map(n => `<option>${n}</option>`).join('');
+    $('rx').value = 'blade pitch (°)'; $('ry').value = 'speed (rpm)';
+  }
+  // transients (spin-up, gusts) smear "rpm per pitch"; keep samples where the rotor is near steady
+  const keep = [...Array(N).keys()].filter(i => !$('steady').checked || Math.abs(W.alpha[i]) < +$('amax').value);
+  const pair = (a, b) => keep.filter(i => a[i] != null && b[i] != null && isFinite(a[i]) && isFinite(b[i]));
+  const X = S[$('rx').value], Y = S[$('ry').value], idx = pair(X, Y), xs = idx.map(i => X[i]), ys = idx.map(i => Y[i]);
+  const lo = Math.min(...xs), hi = Math.max(...xs), nb = 20, bx = [], by = [];
+  for (let b = 0; b < nb && hi > lo; b++) {                       // mean Y per X bin, e.g. average rpm per pitch angle
+    const sel = idx.filter(i => X[i] >= lo + (hi - lo) * b / nb && (b === nb - 1 ? X[i] <= hi : X[i] < lo + (hi - lo) * (b + 1) / nb));
+    if (sel.length) { bx.push(sel.reduce((a, i) => a + X[i], 0) / sel.length); by.push(sel.reduce((a, i) => a + Y[i], 0) / sel.length); }
+  }
+  const r = idx.length > 2 ? pearson(xs, ys) : null, fit = polyfit(xs, ys, +$('deg').value);
+  const num = v => Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-3 && v) ? v.toExponential(3) : v.toPrecision(4);
+  const eq = fit && fit.c.map((c, k) => k === 0 ? num(c) : `${c < 0 ? '−' : '+'} ${num(Math.abs(c))}·x${k > 1 ? (k === 2 ? '²' : '³') : ''}`).join(' ');
+  $('rstat').innerHTML = `${idx.length} samples · Pearson r = ${r == null ? '—' : r.toFixed(3)}` +
+    (fit ? ` · <b>y = ${eq}</b> · R² = ${fit.r2.toFixed(3)}` : '');
+  const lay = { margin: { l: 60, r: 20, t: 10, b: 45 }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: fg, size: 11 },
+    xaxis: { title: { text: $('rx').value }, gridcolor: grid }, yaxis: { title: { text: $('ry').value }, gridcolor: grid },
+    legend: { orientation: 'h', y: 1.08, x: 1, xanchor: 'right' } };
+  Plotly.react('ch_rel', [{ x: xs, y: ys, type: 'scatter', mode: 'markers', name: 'samples (color = time)',
+      marker: { size: 4, color: idx.map(i => T[i]), colorscale: 'Viridis', colorbar: { title: { text: 's' }, thickness: 8 } } },
+    { x: bx, y: by, type: 'scatter', mode: 'lines+markers', name: 'mean per bin', line: { color: fg, width: 2 }, marker: { size: 5, color: fg } },
+    ...(fit ? [{ x: fit.cx, y: fit.cy, type: 'scatter', mode: 'lines', name: 'fit', line: { color: css('--bad'), width: 2 } }] : [])], lay, cfg);
+  const keys = names.filter(n => pair(S[n], S[n]).length > 2), z = keys.map(a => keys.map(b => { const k = pair(S[a], S[b]);
+    return k.length > 2 ? pearson(k.map(i => S[a][i]), k.map(i => S[b][i])) : null; }));
+  Plotly.react('ch_corr', [{ z, x: keys, y: keys, type: 'heatmap', zmin: -1, zmax: 1, colorscale: 'RdBu', texttemplate: '%{z:.2f}',
+    textfont: { size: 9 }, colorbar: { title: { text: 'r' }, thickness: 8 } }],
+    { margin: { l: 150, r: 20, t: 10, b: 130 }, paper_bgcolor: 'rgba(0,0,0,0)', font: { color: fg, size: 10 }, yaxis: { autorange: 'reversed' } }, cfg);
+  $('ch_corr').removeAllListeners?.('plotly_click');
+  $('ch_corr').on('plotly_click', e => { $('rx').value = e.points[0].x; $('ry').value = e.points[0].y; relations(); });
+}
+for (const id of ['rx', 'ry', 'steady', 'amax', 'deg']) $(id).oninput = () => D && relations();
+
+const arrow = (x, y, dx, dy, color) => Math.hypot(dx, dy) < 0.01 ? '' :
+  `<line x1="${x}" y1="${-y}" x2="${x + dx}" y2="${-(y + dy)}" stroke="${color}" stroke-width="0.035" marker-end="url(#ah-${color.replace('#', '')})"/>`;
+const markers = cs => '<defs>' + cs.map(c => `<marker id="ah-${c.replace('#', '')}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${c}"/></marker>`).join('') + '</defs>';
+
+function idx(t) { let lo = 0, hi = N - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (T[m] <= t) lo = m; else hi = m - 1; } return lo; }
+
+function render() {
+  const i = idx(simT), w = W.w[i], a = W.alpha[i];
+  const th = (W.theta[i] + w * (simT - T[i]) * DEG + C.offset) / DEG;   // interpolate between 10 Hz samples
+  const thd = th - PI / 2;   // drawing only: 0 deg points down the screen, like a gravity reference
+  const [c1, c2, c3, c4, c5, mu, fg, bad, ink] = ['--c1', '--c2', '--c3', '--c4', '--c5', '--muted', '--line', '--bad', '--fg'].map(css);
+  // top view: math coords (y up), to scale -- the larger of r and R is drawn as 1
+  const sc = Math.max(C.r, C.R), Rd = C.R / sc, rs = C.r / sc;
+  let s = markers([c1, c2, c3, c4]) + `<circle r="${Rd}" fill="none" stroke="${fg}" stroke-width="0.02" stroke-dasharray="0.05 0.04"/>` +
+    `<text x="-1.4" y="1.4" font-size="0.1" fill="${mu}">R = ${C.R} m · r = ${C.r} m</text>`;
+  s += `<line x1="0" y1="0" x2="0" y2="1.3" stroke="${mu}" stroke-width="0.012" stroke-dasharray="0.03 0.03"/><text x="0.04" y="1.3" font-size="0.1" fill="${mu}">0° (down)</text>`;
+  for (let k = 0; k < C.n; k++) {
+    const b = thd + 2 * PI * k / C.n, x = Rd * Math.cos(b), y = Rd * Math.sin(b);
+    s += `<line x1="0" y1="0" x2="${k ? x : Math.max(Rd, rs) * Math.cos(b)}" y2="${-(k ? y : Math.max(Rd, rs) * Math.sin(b))}" stroke="${k ? mu : css('--fg')}" stroke-width="${k ? 0.025 : 0.04}"/>
+          <rect x="${x - 0.06}" y="${-y - 0.06}" width="0.12" height="0.12" rx="0.02" fill="${k ? mu : css('--fg')}" transform="rotate(${-b * DEG} ${x} ${-y})"/>`;
+  }
+  const sx = rs * Math.cos(thd), sy = rs * Math.sin(thd), tx = -Math.sin(thd), ty = Math.cos(thd), L = 0.65;
+  const vv = w * C.r, ac = w * w * C.r, at = a * C.r;
+  s += arrow(sx, sy, tx * L * vv / W.vMax, ty * L * vv / W.vMax, c1);
+  s += arrow(sx, sy, -Math.cos(thd) * L * ac / W.acMax, -Math.sin(thd) * L * ac / W.acMax, c2);
+  s += arrow(sx, sy, tx * L * at / W.acMax, ty * L * at / W.acMax, c3);   // same scale as centripetal: lengths compare
+  s += arrow(0, 0, 0.5 * D.w_e1[i] / W.wobMax, 0.5 * W.we2[i] / W.wobMax, c4);
+  s += `<circle cx="${sx}" cy="${-sy}" r="0.045" fill="${bad}"/><circle r="0.05" fill="${css('--fg')}"/>`;
+  $('top').innerHTML = s;
+  // side view: horizontal ground line, gravity straight down, axis raised by the elevation angle
+  const el = W.elev[i], e = (el ?? 0) / DEG, ex = Math.cos(e), ey = Math.sin(e);
+  $('side').innerHTML = markers([ink]) +
+    `<line x1="-1.3" y1="0" x2="1.3" y2="0" stroke="${mu}" stroke-width="0.012" stroke-dasharray="0.04 0.03"/>` +
+    `<text x="0.75" y="0.12" font-size="0.1" fill="${mu}">horizontal</text>` +
+    arrow(0, -0.2, 0, -1, ink) + `<text x="0.06" y="1.15" font-size="0.12" fill="${ink}">g (gravity)</text>` +
+    `<line x1="${-ex * 1.2}" y1="${ey * 1.2}" x2="${ex * 1.2}" y2="${-ey * 1.2}" stroke="${c5}" stroke-width="0.035"/>` +
+    `<line x1="${ey * 0.8}" y1="${ex * 0.8}" x2="${-ey * 0.8}" y2="${-ex * 0.8}" stroke="${css('--fg')}" stroke-width="0.06" stroke-linecap="round"/>` +
+    `<text x="${ex * 1.2 - 0.3}" y="${-ey * 1.2 - 0.08}" font-size="0.12" fill="${c5}">axis</text>` +
+    `<text x="-1.35" y="-1.25" font-size="0.13" fill="${css('--fg')}">elevation = ${el == null ? 'n/a' : el.toFixed(2) + '°'}</text>`;
+  const f = (v, d = 2) => v == null || !isFinite(v) ? '—' : v.toFixed(d);
+  const rows = [['time', f(simT, 2) + ' s'], ['speed', f(w * 60 / (2 * PI), 1) + ' rpm'], ['ω', f(w, 3) + ' rad/s'],
+    ['speed source', `<span class="${D.gyro_clip[i] ? 'bad' : ''}">${W.src[i]}</span>`],
+    [`angle θ (0° = ${W.gravRef ? D.angle_ref : 'start'})`, f(((th * DEG) % 360 + 360) % 360, 1) + '°'], ['α', f(a, 3) + ' rad/s²'], ['net torque τ', f(W.torque[i], 5) + ' N·m'], ['blade pitch', f(W.pitch[i], 1) + '°'], ['tip speed ratio λ', f(W.tsr[i], 2)],
+    ['sensor speed v = ωr', f(vv, 3) + ' m/s'], ['centripetal ω²r', f(ac / G, 3) + ' g'], ['tangential αr', f(at / G, 4) + ' g'],
+    ['axis elevation', el == null ? 'n/a' : f(el, 2) + '°'], ['axis drift', f(D.drift[i], 2) + '°'], ['wobble', (D.w_e1[i] == null ? '—' : f(Math.hypot(D.w_e1[i], D.w_e2[i]), 2)) + ' °/s']];
+  $('stats').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  // sensor -> rotor transform at this sample: rows e1, e2 = u x e1, u (u flipped with the view)
+  const u = D.axis_u.map(c => W.sg * c[i]), e1 = D.e1, e2 = [u[1] * e1[2] - u[2] * e1[1], u[2] * e1[0] - u[0] * e1[2], u[0] * e1[1] - u[1] * e1[0]];
+  const Mx = [e1, e2, u], names = D.angle_ref === 'sensor at bottom' ? ['e1 radial', 'e2 chord', 'u spin'] : ['e1 (arbitrary)', 'e2', 'u spin'], g = D.gyro.map(c => c[i]), ra = D.acc.map(c => c[i]);
+  const mul = v => Mx.map(r => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]), fx = (v, d) => v == null || !isFinite(v) ? '—' : v.toFixed(d);
+  // rotor = M · raw, drawn as a bracketed matrix equation, then one row worked out in full
+  const col = (vals, d, labels) => `<table class="mx bk">${vals.map((x, k) => `<tr>${labels ? `<td class="l">${labels[k]}</td>` : ''}<td>${fx(x, d)}</td></tr>`).join('')}</table>`;
+  const mat = `<table class="mx bk"><tr><th></th><th>x</th><th>y</th><th>z</th></tr>${Mx.map((r, k) =>
+    `<tr><td class="l">${names[k]}</td>${r.map(c => `<td>${fx(c, 4)}</td>`).join('')}</tr>`).join('')}</table>`;
+  const block = (title, v, unit, d, rotorNames, note) => { const out = mul(v), u3 = Mx[2];
+    return `<div><b>${title}</b>
+      <div class="mx" style="margin:6px 0">raw [x, y, z] = [${v.map(x => fx(x, d)).join(', ')}] ${unit}<br>
+        rotor [${rotorNames.join(', ')}] = [${out.map(x => fx(x, d)).join(', ')}] ${unit}</div>
+      <div class="eq"><div><div class="muted">rotor</div>${col(out, d, rotorNames)}</div><span>=</span>
+        <div><div class="muted">M (sensor → rotor)</div>${mat}</div><span>·</span>
+        <div><div class="muted">raw</div>${col(v, d, ['x', 'y', 'z'])}</div></div>
+      <div class="mx muted" style="margin-top:6px">e.g. ${rotorNames[2]} = ${u3.map((c, j) => `${fx(c, 4)}×${fx(v[j], d)}`).join(' + ')} = ${fx(out[2], d)}</div>
+      <div class="muted">${note(out)}</div></div>`; };
+  $('xform').innerHTML = (names[1] === 'e2' ? '<div class="muted" style="flex-basis:100%">e1 is arbitrary here: the rotor never spun fast enough (30 rpm) to find the radius direction.</div>' : '') +
+    block('Angular velocity (gyro)', g, '°/s', 2, names,
+      o => `Spin ${fx(o[2], 1)} °/s ÷ 6 = ${fx(o[2] / 6, 1)} rpm${D.gyro_clip[i] ? ' (gyro saturated: the speed shown elsewhere comes from the accelerometer)' : ''}. Radial and chord parts are the wobble (the wobble chart also removes the pitch rate).`) +
+    block('Acceleration (accelerometer)', ra, 'g', 3, [names[0], names[1], 'u axial'],
+      o => `Radial ≈ −centripetal + gravity; chord ≈ tangential + gravity; axial = gravity × sin(elevation).`);
+  $('clock').textContent = `${simT.toFixed(2)} / ${T[N-1].toFixed(2)} s`;
+  $('seek').value = simT;
+  const now = performance.now();
+  if (now - lastRelayout > 120) { lastRelayout = now;
+    for (const id of CHARTS) if ($(id).on && !$(id).hidden) Plotly.relayout(id, { 'shapes[0].x0': simT, 'shapes[0].x1': simT }); }
+}
+
+function seek(t) { simT = Math.min(Math.max(+t, 0), T[N-1]); render(); }
+function loop(now) {
+  if (!playing) return;
+  simT += (now - lastFrame) / 1000 * +$('speed').value; lastFrame = now;
+  if (simT >= T[N-1]) { simT = T[N-1]; playing = false; $('play').textContent = '▶ Play'; }
+  render(); requestAnimationFrame(loop);
+}
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? '⏸ Pause' : '▶ Play';
+  if (playing) { if (simT >= T[N-1]) simT = 0; lastFrame = performance.now(); requestAnimationFrame(loop); } };
+$('seek').oninput = e => seek(e.target.value);
+document.querySelectorAll('.consts input').forEach(el => el.oninput = () => { if (D) { derive(); charts(); render(); } });
+if (D) init(D);
+</script>
+<script>
+// Opened the raw template (placeholders never filled): the main script died on the data placeholder, so say what to open instead.
+if (document.getElementById('pysrc').textContent === '__PY' + 'SRC__')
+  document.getElementById('status').textContent = 'This is the template, not a viewer. Open out/blade_viewer.html ' +
+    '(create it with: python3 blade_torque.py).';
+</script>
+</body>
+</html>
